@@ -13,4 +13,4 @@ class AgentState(TypedDict):
     code: Optional[str]             # Coder 生成的代码
     messages: Annotated[List[dict], operator.add] # (可选) 这是一个追加型列表，用于保存对话历史
     review_feedback:Optional[str]   #代码审查意见
-    interation_count :int           # (新增) 循环次数，防止死循环
+    iteration_count :int           # (新增) 循环次数，防止死循环

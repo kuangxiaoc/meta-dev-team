@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from meta_dev_team.state import AgentState
-
+from langchain_experimental.utilities import PythonREPL
+from meta_dev_team.utils import clean_code
 # 1. 加载环境变量
 load_dotenv()
 
@@ -69,28 +70,38 @@ def coder_node(state: AgentState):
 
 def reviewer_node(state: AgentState):
     """
-    Reviewer 节点：模拟代码审查
+    Reviewer 节点 (升级版)：真机运行代码
     """
-    print(f"\n--- [Reviewer] 正在审查代码 ---")
-    code = state['code']
+    print(f"\n--- [Reviewer] 正在运行代码检查 ---")
     
-    # 这里我们模拟一个挑剔的审查员
-    # 提示词技巧：要求它在通过时必须只输出 "PASS"
-    system_prompt = """
-    你是代码审查员。检查代码是否有明显的逻辑错误、缺少 import 或不符合需求。
-    如果代码看起来没问题，请**仅**输出 "PASS"。
-    如果代码有问题，请简短列出修改建议。
-    """
+    raw_code = state['code']
+    # 1. 清洗代码
+    cleaned_code = clean_code(raw_code)
     
-    user_prompt = f"待审查代码：\n{code}"
+    # 2. 初始化 Python 执行器
+    repl = PythonREPL()
     
-    messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
-    response = llm.invoke(messages)
-    
-    feedback = response.content
-    if "PASS" in feedback:
-        print(">>> 审查通过！")
-    else:
-        print(f">>> 发现问题: {feedback}")
+    # 3. 尝试运行
+    try:
+        # captures output (stdout) and errors
+        result = repl.run(cleaned_code)
+        print(f">>> 运行输出:\n{result}")
         
+        # 简单的判断逻辑：
+        # 如果 result 里包含 "Traceback" 或 "Error"，说明挂了
+        # 注意：PythonREPL 有时候会把 stderr 合并到 stdout
+        if "Traceback" in result or "Error" in result:
+            feedback = f"运行时报错 (Runtime Error):\n{result}"
+            print(f">>> 检测到运行错误，打回！")
+        else:
+            # 运行成功，但我们最好还是让 LLM 稍微看一眼逻辑（双重保险）
+            # 或者为了简化 MVP，只要运行不报错就算 PASS
+            feedback = "PASS"
+            print(">>> 运行成功，测试通过！")
+            
+    except Exception as e:
+        # 捕获 PythonREPL 本身抛出的异常（比较少见，通常是上面捕获）
+        feedback = f"执行环境异常: {str(e)}"
+        print(f">>> 执行异常: {feedback}")
+
     return {"review_feedback": feedback}

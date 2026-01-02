@@ -6,3 +6,4 @@ echo "*.pyc" >> .gitignore
 .venv/
 __pycache__
 *.pyc
+echo ".DS_Store" >> .gitignore

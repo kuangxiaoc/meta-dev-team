@@ -100,7 +100,7 @@ python src/meta_dev_team/main.py
 4.  **Coder** 修复：修改为 `try-except` 结构。
 5.  **Reviewer** 复测：运行通过，输出 PASS。
 
-*(此处可后续补充 Chainlit 运行截图)*
+![alt text](image.png)
 
 ## 📦 技术栈 (Tech Stack)
 

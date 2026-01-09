@@ -1,0 +1,116 @@
+/* public/style.css */
+
+/* 1. 引入衬线体 (Merriweather) 模拟 Claude 的字体风格 */
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  /* Anthropic/Claude 风格配色 */
+  --claude-bg: #FBF9F6;           /* 温暖的米白色背景 */
+  --claude-accent: #DA7756;       /* 标志性的焦糖色 */
+  --claude-text: #2D2D2D;         /* 深炭灰 */
+  --claude-user-bg: #F0EEE6;      /* 用户气泡浅灰 */
+}
+
+/* 全局背景和字体 */
+body, .cl-app {
+  background-color: var(--claude-bg) !important;
+  font-family: 'Merriweather', serif !important; /* 核心：使用衬线体 */
+  color: var(--claude-text) !important;
+}
+
+/* 侧边栏/聊天区域背景统一 */
+.MuiPaper-root, .cl-sidebar {
+    background-color: var(--claude-bg) !important;
+}
+
+/* --- 消息气泡样式 --- */
+
+/* 用户的消息：卡片式，轻微的背景色 */
+.cl-user-message .cl-message-content {
+    background-color: var(--claude-user-bg) !important;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-family: 'Inter', sans-serif !important; /*以此区分，输入内容用无衬线 */
+}
+
+/* AI 的消息：透明背景，纯文本，靠左 */
+.cl-assistant-message {
+    background-color: transparent !important;
+}
+
+/* 调整 Markdown 文字大小和行高，增加阅读舒适度 */
+.cl-message-content p {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: #333;
+}
+
+/* --- 输入框区域 --- */
+
+/* 输入框背景 */
+.cl-chat-input {
+    background-color: #FFFFFF !important;
+    border: 1px solid #E5E5E5;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+/* 发送按钮 - 变成 Claude 的焦糖色 */
+.cl-send-button {
+    color: var(--claude-accent) !important;
+}
+
+/* --- 步骤/思考过程 (Step) --- */
+/* 让折叠的思考过程看起来更像一份文档 */
+.cl-step {
+    border-left: 3px solid var(--claude-accent) !important;
+    background-color: #fff !important;
+    border-radius: 0 8px 8px 0;
+}
+
+/* --- 代码块样式优化 --- */
+
+/* 1. 将代码块改为深色背景，配合高亮颜色 */
+pre {
+    background-color: #1e1e1e !important; /* VS Code 风格深灰背景 */
+    color: #e4e4e4 !important;             /* 默认文字颜色设为浅灰 */
+    border-radius: 8px;
+    border: 1px solid #333 !important;     /* 边框微调 */
+    padding: 12px !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* 2. 针对行内代码 (Inline Code) 保持浅色，避免太突兀 */
+/* 例如文中的 `variable` */
+:not(pre) > code {
+    background-color: #e5e5e5 !important; /* 浅灰色背景 */
+    color: #c7254e !important;             /* 红色文字突出 */
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-family: 'Fira Code', monospace !important;
+}
+
+/* 3. 针对代码块内的代码文字 */
+pre code {
+    background-color: transparent !important; /* 继承 pre 的深色背景 */
+    font-family: 'Fira Code', monospace !important;
+    font-size: 0.9em;
+}
+
+/* 4. 修复滚动条样式（在深色背景下更好看） */
+pre::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+pre::-webkit-scrollbar-track {
+    background: #1e1e1e;
+}
+pre::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+}
+
+/* 隐藏部分 Chainlit 默认的 watermark */
+a[href*="chainlit"] {
+    display: none !important;
+}

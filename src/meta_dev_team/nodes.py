@@ -5,7 +5,8 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from meta_dev_team.state import AgentState
 from langchain_experimental.utilities import PythonREPL
-from meta_dev_team.utils import clean_code
+from meta_dev_team.utils import parse_multi_file_code
+from meta_dev_team.sandbox import DockerSandbox
 # 1. 加载环境变量
 load_dotenv()
 
@@ -21,23 +22,26 @@ llm = ChatOpenAI(
 # --- 节点定义 ---
 
 def product_manager_node(state: AgentState):
-    """
-    PM 节点：负责分析需求
-    """
-    print(f"\n--- [PM] 正在分析需求: {state['requirement']} ---")
+    print(f"\n--- [PM] 分析需求 ---")
+    # 更新 Prompt，强调文件结构
+    system_prompt = """你是一位资深技术架构师。
+    请根据用户需求，设计一份详细的【开发计划】。
     
-    system_prompt = "你是一位资深产品经理。请根据用户的需求，编写一份简短清晰的开发计划（Spec）。包含核心功能点即可。"
+    必须明确规划以下内容：
+    1. 需要创建哪些文件（文件名必须包含扩展名）。
+    2. 每个文件的核心职责（例如：main.py 负责调度，utils.py 负责核心逻辑）。
+    3. 涉及到的第三方库（生成 requirements.txt 内容）。
+    
+    请确保计划具备可执行性，不要只给笼统的建议。"""
+
     user_prompt = f"需求：{state['requirement']}"
     
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_prompt)
-    ]
+    messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
     
     response = llm.invoke(messages)
     
-    # 返回更新的状态：更新 'plan' 初始化计数器
-    return {"plan": response.content,"interation_count":0}
+    return {"plan": response.content, "iteration_count": 0}
+
 
 def coder_node(state: AgentState):
     """
@@ -45,63 +49,90 @@ def coder_node(state: AgentState):
     """
     plan = state['plan']
     feedback = state.get('review_feedback')
+    
+    # 核心修改：System Prompt 强制要求多文件格式
+    format_instruction = """
+    【输出格式严格要求】
+    请你将代码拆分为多个文件，并严格按照以下格式输出（不要使用 Markdown 代码块包裹整个输出，而是针对每个文件单独包裹）：
+
+    ## file: <filename>
+    ```python
+    <file_content>
+    ```
+
+    【示例结构参考】（注意：以下仅为格式示例，**绝对不要**抄袭里面的代码逻辑！）
+    
+    ## file: requirements.txt
+    requests
+    pandas
+    
+    ## file: utils.py
+    ```python
+    # 这是一个格式示例，请根据实际需求编写真实逻辑
+    def real_function():
+        pass
+    ```
+    """
+    base_instruction = f"""
+    你是 Python 专家工程师。请根据【开发计划】或【审查反馈】编写代码。
+    
+    ⚠️ **重要指令**：
+    1. **必须** 严格遵循【开发计划】中的业务逻辑（例如：如果要求爬虫，必须使用 requests/BeautifulSoup 等；如果要求 CSV，必须用 pandas/csv）。
+    2. **禁止** 使用 "Hello World" 或 "pass" 等占位符代码，必须写出完整可运行的逻辑。
+    3. 必须输出 `requirements.txt` 以处理依赖。
+    
+    {format_instruction}
+    """
     if feedback:
-        print(f"\n--- [Coder] 收到反馈，正在修复代码 (第 {state['iteration_count'] + 1} 次迭代) ---")
-        system_prompt = "你是高级Python工程师。根据审查反馈修复代码。只输出完整的修正后代码。"
-        user_prompt = f"原代码：\n{state['code']}\n\n审查反馈：{feedback}"
+        print(f"\n--- [Coder] 修复代码 (Round {state['iteration_count'] + 1}) ---")
+        user_prompt = f"""
+        【任务目标】：根据审查反馈修复代码。
+        
+        【上次代码反馈】：
+        {feedback}
+        
+        请重写所有受影响的文件。
+        """
     else:
-        print(f"\n--- [Coder] 正在编写代码 ---")
-        system_prompt = "您是一位精英python程序员。您接收项目想法，并输出安全且可组合的代码。您始终使用最新的技术和最佳实践。深呼吸，逐步思考如何使用以下步骤最佳地完成这个目标。不需要markdown的解释"
-        user_prompt = f"开发计划：\n{plan}"
+        print(f"\n--- [Coder] 编写代码 ---")
+        user_prompt = f"""
+        【任务目标】：根据开发计划编写代码。
+        
+        【开发计划】：
+        {plan}
+        """
     
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_prompt)
-    ]
-    
+    messages = [SystemMessage(content=base_instruction), HumanMessage(content=user_prompt)]
     response = llm.invoke(messages)
     
-    # 返回更新的状态：更新 'code' 并增加计数
-    return {"code": response.content,
-            "iteration_count": state.get("iteration_count", 0) + 1,
-            "review_feedback": None # 修复后清除旧反馈
-          }
+    files = parse_multi_file_code(response.content)
+    
+    return {
+        "files": files,
+        "iteration_count": state.get("iteration_count", 0) + 1,
+        "review_feedback": None
+    }
 
-
+    
 def reviewer_node(state: AgentState):
-    """
-    Reviewer 节点 (升级版)：真机运行代码
-    """
-    print(f"\n--- [Reviewer] 正在运行代码检查 ---")
+    print(f"\n--- [Reviewer] Docker 环境运行测试 ---")
     
-    raw_code = state['code']
-    # 1. 清洗代码
-    cleaned_code = clean_code(raw_code)
-    
-    # 2. 初始化 Python 执行器
-    repl = PythonREPL()
-    
-    # 3. 尝试运行
-    try:
-        # captures output (stdout) and errors
-        result = repl.run(cleaned_code)
-        print(f">>> 运行输出:\n{result}")
-        
-        # 简单的判断逻辑：
-        # 如果 result 里包含 "Traceback" 或 "Error"，说明挂了
-        # 注意：PythonREPL 有时候会把 stderr 合并到 stdout
-        if "Traceback" in result or "Error" in result:
-            feedback = f"运行时报错 (Runtime Error):\n{result}"
-            print(f">>> 检测到运行错误，打回！")
-        else:
-            # 运行成功，但我们最好还是让 LLM 稍微看一眼逻辑（双重保险）
-            # 或者为了简化 MVP，只要运行不报错就算 PASS
-            feedback = "PASS"
-            print(">>> 运行成功，测试通过！")
-            
-    except Exception as e:
-        # 捕获 PythonREPL 本身抛出的异常（比较少见，通常是上面捕获）
-        feedback = f"执行环境异常: {str(e)}"
-        print(f">>> 执行异常: {feedback}")
+    files = state.get('files', {})
+    if not files:
+        return {"review_feedback": "❌ Error: Coder 没有生成任何有效的文件格式。请检查输出格式。"}
 
+    # 初始化沙箱
+    sandbox = DockerSandbox() # 默认 python:3.10-slim
+    
+    # 运行
+    result = sandbox.run_project(files, entry_point="main.py")
+    
+    print(f">>> Docker 输出:\n{result}")
+
+    # 简单的判错逻辑
+    if "Traceback" in result or "Error" in result or "ModuleNotFoundError" in result:
+        feedback = f"运行报错:\n{result}"
+    else:
+        feedback = "PASS"
+        
     return {"review_feedback": feedback}
